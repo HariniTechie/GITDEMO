@@ -1,74 +1,92 @@
+# Import necessary libraries
 import pandas as pd
+import numpy as np
 import matplotlib.pyplot as plt
 import seaborn as sns
+import folium
+from folium.plugins import HeatMap
 
 # Load the dataset
-df = pd.read_csv("Motor_Vehicle_Collisions_-_Crashes.csv")
+df = pd.read_csv('Motor_Vehicle_Collisions_Crashes.csv')
 
-# Display basic info about dataset
-print("Dataset Overview:")
-print(df.info())
-
-# Display first few rows
+# Display the first few rows of the dataset
 print(df.head())
 
-# Check missing values
-print("\nMissing Values in Each Column:")
+# Check the columns in the dataset
+print(df.columns)
+
+# Check for missing values
 print(df.isnull().sum())
 
-# Drop columns with too many missing values (adjust as needed)
-df = df.drop(columns=['ON STREET NAME', 'CROSS STREET NAME', 'OFF STREET NAME'], errors='ignore')
+# Handle missing values (drop or fill as needed)
+df = df.dropna(subset=['LATITUDE', 'LONGITUDE', 'CRASH TIME', 'WEATHER'])  # Drop rows with missing critical data
 
-# Drop rows with missing critical data
-df = df.dropna(subset=['BOROUGH', 'CRASH DATE', 'CRASH TIME', 'WEATHER CONDITION'])
+# Convert 'CRASH TIME' to datetime format (if applicable)
+df['CRASH TIME'] = pd.to_datetime(df['CRASH TIME'], format='%H:%M', errors='coerce')
 
-# Convert Date and Time to Datetime format
-df['CRASH DATE'] = pd.to_datetime(df['CRASH DATE'])
-df['CRASH TIME'] = pd.to_datetime(df['CRASH TIME'], format='%H:%M').dt.hour  # Extract hour only
+# Extract hour from 'CRASH TIME'
+df['HOUR'] = df['CRASH TIME'].dt.hour
 
-# 🚦 1. Accidents by Time of Day
-plt.figure(figsize=(10,5))
-sns.countplot(x=df['CRASH TIME'], palette='coolwarm')
-plt.title("Number of Accidents by Hour of Day")
-plt.xlabel("Hour of the Day")
-plt.ylabel("Accident Count")
-plt.xticks(range(0, 24))
-plt.grid()
+# Exploratory Data Analysis (EDA)
+
+# 1. Accidents by Time of Day
+plt.figure(figsize=(10, 6))
+sns.countplot(x='HOUR', data=df, palette='viridis')
+plt.title('Accidents by Hour of the Day')
+plt.xlabel('Hour of the Day')
+plt.ylabel('Number of Accidents')
 plt.show()
 
-# 🌧️ 2. Accidents by Weather Condition
-plt.figure(figsize=(12,5))
-sns.countplot(y=df['WEATHER CONDITION'], order=df['WEATHER CONDITION'].value_counts().index, palette='viridis')
-plt.title("Accidents by Weather Condition")
-plt.xlabel("Accident Count")
-plt.ylabel("Weather Condition")
+# 2. Accidents by Weather Condition
+plt.figure(figsize=(10, 6))
+weather_counts = df['WEATHER'].value_counts().head(10)  # Top 10 weather conditions
+sns.barplot(x=weather_counts.values, y=weather_counts.index, palette='magma')
+plt.title('Top 10 Weather Conditions During Accidents')
+plt.xlabel('Number of Accidents')
+plt.ylabel('Weather Condition')
 plt.show()
 
-# 🏙️ 3. Accidents by Borough
-plt.figure(figsize=(10,5))
-sns.countplot(x=df['BOROUGH'], palette='Set2')
-plt.title("Number of Accidents in Each Borough")
-plt.xlabel("Borough")
-plt.ylabel("Accident Count")
-plt.show()
+# 3. Accidents by Road Surface Condition (if available)
+if 'ROAD SURFACE' in df.columns:
+    plt.figure(figsize=(10, 6))
+    road_counts = df['ROAD SURFACE'].value_counts().head(10)  # Top 10 road conditions
+    sns.barplot(x=road_counts.values, y=road_counts.index, palette='plasma')
+    plt.title('Top 10 Road Surface Conditions During Accidents')
+    plt.xlabel('Number of Accidents')
+    plt.ylabel('Road Surface Condition')
+    plt.show()
 
-# 📍 4. Heatmap of Accident Locations (requires lat/lon data)
-if 'LATITUDE' in df.columns and 'LONGITUDE' in df.columns:
-    import folium
-    from folium.plugins import HeatMap
+# 4. Accident Hotspots (Geographical Visualization)
 
-    accident_map = folium.Map(location=[40.7128, -74.0060], zoom_start=11)  # NYC Center
-    heat_data = df[['LATITUDE', 'LONGITUDE']].dropna().values.tolist()
-    HeatMap(heat_data).add_to(accident_map)
-    accident_map.save("accident_hotspots.html")
-    print("Heatmap saved as 'accident_hotspots.html'. Open it in your browser.")
+# Create a map centered at the mean latitude and longitude
+map_center = [df['LATITUDE'].mean(), df['LONGITUDE'].mean()]
+accident_map = folium.Map(location=map_center, zoom_start=12)
 
-# 🚗 5. Contributing Factors
-plt.figure(figsize=(12,6))
-sns.countplot(y=df['CONTRIBUTING FACTOR VEHICLE 1'], order=df['CONTRIBUTING FACTOR VEHICLE 1'].value_counts().index[:10], palette='pastel')
-plt.title("Top 10 Contributing Factors in Accidents")
-plt.xlabel("Accident Count")
-plt.ylabel("Contributing Factor")
-plt.show()
+# Add a heatmap to visualize accident hotspots
+heat_data = [[row['LATITUDE'], row['LONGITUDE']] for index, row in df.iterrows()]
+HeatMap(heat_data).add_to(accident_map)
 
-print("\n✅ Traffic accident analysis completed successfully!")
+# Save the map to an HTML file
+accident_map.save('accident_hotspots.html')
+
+# Display the map (in Jupyter Notebook or open the saved HTML file)
+accident_map
+
+# 5. Contributing Factors (if available)
+if 'CONTRIBUTING FACTOR' in df.columns:
+    plt.figure(figsize=(10, 6))
+    factor_counts = df['CONTRIBUTING FACTOR'].value_counts().head(10)  # Top 10 contributing factors
+    sns.barplot(x=factor_counts.values, y=factor_counts.index, palette='coolwarm')
+    plt.title('Top 10 Contributing Factors to Accidents')
+    plt.xlabel('Number of Accidents')
+    plt.ylabel('Contributing Factor')
+    plt.show()
+
+# Summary of Findings
+print("Summary of Findings:")
+print(f"1. Most accidents occur between {df['HOUR'].mode()[0]}:00 and {df['HOUR'].mode()[0] + 1}:00.")
+print(f"2. Most common weather condition during accidents: {df['WEATHER'].mode()[0]}.")
+if 'ROAD SURFACE' in df.columns:
+    print(f"3. Most common road surface condition during accidents: {df['ROAD SURFACE'].mode()[0]}.")
+if 'CONTRIBUTING FACTOR' in df.columns:
+    print(f"4. Most common contributing factor to accidents: {df['CONTRIBUTING FACTOR'].mode()[0]}.")
